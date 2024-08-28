@@ -1,0 +1,148 @@
+#!/bin/bash
+
+# this script finds camera cards either from an input
+# supported inputs are a directory to descend in search of camera cards or a treesize report in Excel or a csv in the format of the treesize file inventory sheet
+
+INPUT="${1}"
+INPUT_EXT="${INPUT##*.}"
+
+_split_csv(){
+    MOV_INVENTORY="${TREESIZE_CSV%%.*}.MOV.csv"
+    if [[ ! -f "${MOV_INVENTORY}" ]] ; then
+        echo "Splitting out an inventory of MOV files"
+        grep ".MOV$" "${TREESIZE_CSV}" | sort -t "," -k2,2 -k1,1 > "${MOV_INVENTORY}"
+        echo "Found $(wc -l "${MOV_INVENTORY}") MOV files."
+    fi
+    MP4_INVENTORY="${TREESIZE_CSV%%.*}.MP4.csv"
+    if [[ ! -f "${MP4_INVENTORY}" ]] ; then
+        echo "Splitting out an inventory of MP4 files"
+        grep ".MP4$" "${TREESIZE_CSV}" | sort -t "," -k2,2 -k1,1 >> "${MP4_INVENTORY}"
+        echo "Found $(wc -l "${MP4_INVENTORY}") MP4 files."
+    fi
+    MTS_INVENTORY="${TREESIZE_CSV%%.*}.MTS.csv"
+    if [[ ! -f "${MTS_INVENTORY}" ]] ; then
+        echo "Splitting out an inventory of MTS files"
+        grep ".MTS$" "${TREESIZE_CSV}" | sort -t "," -k2,2 -k1,1 >> "${MTS_INVENTORY}"
+        echo "Found $(wc -l "${MTS_INVENTORY}") MTS files."
+    fi
+    MXF_INVENTORY="${TREESIZE_CSV%%.*}.MXF.csv"
+    if [[ ! -f "${MXF_INVENTORY}" ]] ; then
+        echo "Splitting out an inventory of MXF files"
+        grep ".MXF$" "${TREESIZE_CSV}" | sort -t "," -k2,2 -k1,1 >> "${MXF_INVENTORY}"
+        echo "Found $(wc -l "${MXF_INVENTORY}") MXF files."
+    fi
+}
+
+if [[ -d "${INPUT}" ]] ; then
+    echo "Recognizing the input (${INPUT}) as a directory, but this isn't set up yet. Exiting."
+    exit
+elif [[ "${INPUT_EXT}" = "xlsx" ]] ; then
+    echo "Recognizing the input as an excel file. Perhaps a tree size report."
+    TREESIZE_CSV="${1%.*}.csv"
+    if [[ -f "${TREESIZE_CSV}" ]] ; then
+        echo "Seems like a csv was already made from the treesize report at ${TREESIZE_CSV}."
+    else
+        echo "Making a csv from the treesize report..."
+        INPUT_SHEETS="$(in2csv -n "${INPUT}")"
+        SHEET_NAME="$(echo "${INPUT_SHEETS}" | grep "[0-9]{4}-[0-9]{2}-[0-9]{2}" | head -n 1)"
+        if [[ -n "$(echo "${INPUT_SHEETS}" | grep Extensions)" && "$(echo "${INPUT_SHEETS}" | grep Details)" && -n "${SHEET_NAME}" ]] ; then
+            echo "This seems to be a treesize report with an inventory on the sheet named ${SHEET_NAME}."
+        else
+            echo "Hmmm, no file inventory found. Perhaps this isn't a treesize report."
+            exit
+        fi
+        in2csv --sheet "${SHEET_NAME}" "${INPUT}" > "${TREESIZE_CSV}"
+    fi
+elif [[ "${INPUT_EXT}" = "csv" ]] ; then
+    echo "Recognizing the input as a csv."
+    TREESIZE_CSV="${INPUT}"
+else
+    echo "Hmmm, not sure what ${INPUT} is. Exiting."
+    exit
+fi
+
+_split_csv
+
+
+_make_card_inventory(){
+    EXTENSION="${1}"
+    FILE_INVENTORY="${2}"
+    CARD_INVENTORY="${3}"
+    LAST_DIR=""
+    COUNTER=0
+    FIRST=1
+    while read LINE ; do
+        PATH="$(echo "${LINE}" | /usr/bin/cut -d "," -f 2- | /usr/bin/sed -e "s|^\"||;s|.${EXTENSION},.*||;s|.${EXTENSION}\",.*||").${EXTENSION}"
+        DIR="$(/usr/bin/dirname "${PATH}")"
+        FILENAME="$(/usr/bin/basename "${PATH}")"
+        ((COUNTER++))
+        if [[ "${FIRST}" = "1" ]] ; then
+            echo -n "${DIR},${FILENAME},"
+            FIRST=0
+        elif [[ "${DIR}" != "${LAST_DIR}" ]] ; then
+            echo "${LAST_FILENAME},${COUNTER}"
+            COUNTER="0"
+            echo -n "${DIR},${FILENAME},"
+        fi
+        # add tally of the filesize
+        # last modification date
+        # add owner name
+        # add column on if cards match a pattern
+        # add column if already processed
+        LAST_DIR="${DIR}"
+        LAST_FILENAME="${FILENAME}"
+    done < <(/usr/bin/sed 's|\\|/|g' "${FILE_INVENTORY}") > "${CARD_INVENTORY}"
+    
+    # for log coming out of cameracards output, add the input list with filename,in,out,duration.
+    
+    # to do
+        # treesize with 
+    
+}
+
+MOV_CARD_INVENTORY="${TREESIZE_CSV%%.*}.MOV_cards.csv"
+_make_card_inventory "MOV" "${MOV_INVENTORY}" "${MOV_CARD_INVENTORY}"
+
+MP4_CARD_INVENTORY="${TREESIZE_CSV%%.*}.MP4_cards.csv"
+_make_card_inventory "MP4" "${MP4_INVENTORY}" "${MP4_CARD_INVENTORY}"
+
+MTS_CARD_INVENTORY="${TREESIZE_CSV%%.*}.MTS_cards.csv"
+_make_card_inventory "MTS" "${MTS_INVENTORY}" "${MTS_CARD_INVENTORY}"
+
+MXF_CARD_INVENTORY="${TREESIZE_CSV%%.*}.MXF_cards.csv"
+_make_card_inventory "MXF" "${MXF_INVENTORY}" "${MXF_CARD_INVENTORY}"
+
+exit
+
+### 1 find candidate camera cards by type
+    # to do, consider filtering out files that are not non "Video File" files or not used in camera card discovery
+
+echo "Find P2 cards:"
+grep "CONTENTS" "${TREESIZE_CSV}" | cut -d, -f2 | sed 's/CONTENTS.*//' | uniq
+# or if INDEX.MIF is found
+echo
+
+echo "Find XAVC cards:"
+grep "XDROOT" "${TREESIZE_CSV}" | cut -d, -f2 | sed 's/XDROOT.*//' | uniq
+# or search for DISCMETA.XML
+echo
+
+echo "Find AVCHD cards:"
+grep "BDMV" "${TREESIZE_CSV}" | cut -d, -f2 | sed 's/BDMV.*//' | uniq
+echo
+
+echo "Find XDCAMEX cards:"
+grep "BPAV" "${TREESIZE_CSV}" | cut -d, -f2 | sed 's/BPAV.*//' | uniq
+# or if INDEX.MIF is found
+echo
+
+# 1 find candidate camera cards by type
+# 2 validate cards (check that there's actually media inside)
+# 3 summary cards and compare to ingest status
+# 3.1 deduplicate card and dedupe across multiple tree size reports
+# 4A show thumbnail proofsheets of cards
+# 4 ingest selection of cards
+# 4.1 evaluate audio
+# 4.2 concatenate and transcode to output
+# 4.3 the concat output should just have 2 mono tracks
+
