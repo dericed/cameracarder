@@ -3,66 +3,131 @@
 # this script finds camera cards either from an input
 # supported inputs are a directory to descend in search of camera cards or a treesize report in Excel or a csv in the format of the treesize file inventory sheet
 
+# dependencies: in2csv (to convert excel to csv), xsv (for csv parsing)
+DEPENDENCIES=(in2csv xsv)
+
+# get list of needed columns to add to documentation here
+# look up csv header row and the get index numbers of column
+
 INPUT="${1}"
 INPUT_EXT="${INPUT##*.}"
 
+# add appendix to report with helpful commands like find /folder -type d -empty
+
+_check_dependencies(){
+    DEPS_OK=YES
+    while [ "${*}" != "" ] ; do
+        DEPENDENCY="${1}"
+        if [ ! $(which "${DEPENDENCY}") ] ; then
+            echo "This script requires ${DEPENDENCY} to run but it is not installed"
+            echo "If you are running ubuntu or debian you might be able to install ${DEPENDENCY} with the following command"
+            echo "sudo apt-get install ${DEPENDENCY}"
+            echo "If you are running mac you might be able to install ${DEPENDENCY} with the following command"
+            echo "brew install ${DEPENDENCY}"
+            DEPS_OK=NO
+        fi
+        shift
+    done
+    if [[ "${DEPS_OK}" = "NO" ]]; then
+        echo "Unmet dependencies"
+        echo "Exiting!"
+        exit 1
+    else
+        return 0
+    fi
+}
+_check_dependencies "${DEPENDENCIES[@]}"
+
+_report_duplicates(){
+    # examine files
+
+    # option to recommend first or last for duplication
+    # summary potential for deleting duplicates, sum the totals
+    # add in duplicates of size and mod date, some times extra filename has "(1)"
+
+    # have a mover to send files to new place.
+    # duplicate column that is the preserved orginal, column of the deleted.
+    # have a column to opt into the process. g
+
+    # support deduplication across 
+
+    DUPLICATE_FILES="${TREESIZE_CSV%.*}.DUPLICATES.txt"
+    cut -d, -f1,3 "${MEDIA_INVENTORY}" | sort | uniq -c | grep -v "^   1" > "${DUPLICATE_FILES}"
+}
+
+_report_on_service_files(){
+    # add filter to give an age date.
+    # one variable for mod date and one for access date
+
+    LIKELY_SERVICE_FILES="${TREESIZE_CSV%.*}.LIKELY_SERVICE_FILES.csv"
+    echo "Classification,Name,Path,Size,Files,Folders,% of Parent (Size),Last Modified,Last Accessed,Owner,Attributes,Type,Creation Date,File Extension" > "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "^AFP[ -]TV" "${MEDIA_INVENTORY}" | sed 's|^|Likely AFP,|g' >> "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "^[0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9a-z]" "${MEDIA_INVENTORY}" | sed 's|^|Likely AP,|g' >> "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "[0-9]_[0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9a-z]" "${MEDIA_INVENTORY}" | sed 's|^|Likely AP,|g' >> "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "^20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z_" "${MEDIA_INVENTORY}" | sed 's|^|Likely Reuters,|g' >> "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "^Storyful" "${MEDIA_INVENTORY}" | sed 's|^|Likely Storyful,|g' >> "${LIKELY_SERVICE_FILES}"
+    echo "Found $(wc -l "${LIKELY_SERVICE_FILES}" | awk '{print $1}') potential service files."
+    echo "$(grep -i "^Likely AFP,"     "${LIKELY_SERVICE_FILES}" | wc -l) AFP files"
+    echo "$(grep -i "^Likely AP,"      "${LIKELY_SERVICE_FILES}" | wc -l) AP files"
+    echo "$(grep -i "^Likely Reuters," "${LIKELY_SERVICE_FILES}" | wc -l) Reuters files"
+    echo "$(grep -i "^Likely Storyful" "${LIKELY_SERVICE_FILES}" | wc -l) Storyful files"
+}
+
 _split_csv(){
-    MOV_INVENTORY="${TREESIZE_CSV%%.*}.MOV.csv"
-    if [[ ! -f "${MOV_INVENTORY}" ]] ; then
-        echo "Splitting out an inventory of MOV files"
-        grep ".MOV$" "${TREESIZE_CSV}" | sort -t "," -k2,2 -k1,1 > "${MOV_INVENTORY}"
-        echo "Found $(wc -l "${MOV_INVENTORY}") MOV files."
-    fi
-    MP4_INVENTORY="${TREESIZE_CSV%%.*}.MP4.csv"
-    if [[ ! -f "${MP4_INVENTORY}" ]] ; then
-        echo "Splitting out an inventory of MP4 files"
-        grep ".MP4$" "${TREESIZE_CSV}" | sort -t "," -k2,2 -k1,1 >> "${MP4_INVENTORY}"
-        echo "Found $(wc -l "${MP4_INVENTORY}") MP4 files."
-    fi
-    MTS_INVENTORY="${TREESIZE_CSV%%.*}.MTS.csv"
-    if [[ ! -f "${MTS_INVENTORY}" ]] ; then
-        echo "Splitting out an inventory of MTS files"
-        grep ".MTS$" "${TREESIZE_CSV}" | sort -t "," -k2,2 -k1,1 >> "${MTS_INVENTORY}"
-        echo "Found $(wc -l "${MTS_INVENTORY}") MTS files."
-    fi
-    MXF_INVENTORY="${TREESIZE_CSV%%.*}.MXF.csv"
-    if [[ ! -f "${MXF_INVENTORY}" ]] ; then
-        echo "Splitting out an inventory of MXF files"
-        grep ".MXF$" "${TREESIZE_CSV}" | sort -t "," -k2,2 -k1,1 >> "${MXF_INVENTORY}"
-        echo "Found $(wc -l "${MXF_INVENTORY}") MXF files."
+    MEDIA_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_FILES.csv"
+    if [[ ! -f "${MEDIA_INVENTORY}" ]] ; then
+        echo "Splitting out an inventory of media files"
+        echo "${HEADER_LINE}" > "${MEDIA_INVENTORY}"
+        grep -i ".\(MOV\|MP4\|MTS\|MXF\)," "${TREESIZE_CSV}" | xsv sort --select "${FILE_PATH_INDEX},${FILE_NAME_INDEX}" >> "${MEDIA_INVENTORY}"
+        echo "Found $(wc -l "${MEDIA_INVENTORY}" | awk '{print $1}') media files."
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MOV$" -c) mov files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MP4$" -c) mp4 files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MTS$" -c) mts files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MXF$" -c) mxf files"
     fi
 }
 
 if [[ -d "${INPUT}" ]] ; then
-    echo "Recognizing the input (${INPUT}) as a directory, but this isn't set up yet. Exiting."
+    echo "Recognizing the input ($(basename "${INPUT}")) as a directory, but this isn't set up yet. Exiting."
     exit
 elif [[ "${INPUT_EXT}" = "xlsx" ]] ; then
-    echo "Recognizing the input as an excel file. Perhaps a tree size report."
+    echo "Recognizing the input ($(basename "${INPUT}")) as an excel file. Perhaps a tree size report."
     TREESIZE_CSV="${1%.*}.csv"
     if [[ -f "${TREESIZE_CSV}" ]] ; then
         echo "Seems like a csv was already made from the treesize report at ${TREESIZE_CSV}."
     else
         echo "Making a csv from the treesize report..."
         INPUT_SHEETS="$(in2csv -n "${INPUT}")"
-        SHEET_NAME="$(echo "${INPUT_SHEETS}" | grep "[0-9]{4}-[0-9]{2}-[0-9]{2}" | head -n 1)"
-        if [[ -n "$(echo "${INPUT_SHEETS}" | grep Extensions)" && "$(echo "${INPUT_SHEETS}" | grep Details)" && -n "${SHEET_NAME}" ]] ; then
+        SHEET_NAME="$(echo "${INPUT_SHEETS}" | grep "^20" | head -n 1)"
+        if [[ -n "${SHEET_NAME}" ]] ; then
             echo "This seems to be a treesize report with an inventory on the sheet named ${SHEET_NAME}."
         else
             echo "Hmmm, no file inventory found. Perhaps this isn't a treesize report."
             exit
         fi
-        in2csv --sheet "${SHEET_NAME}" "${INPUT}" > "${TREESIZE_CSV}"
+        in2csv --no-header-row --sheet "${SHEET_NAME}" "${INPUT}" > "${TREESIZE_CSV}"
     fi
 elif [[ "${INPUT_EXT}" = "csv" ]] ; then
-    echo "Recognizing the input as a csv."
+    echo "Recognizing the input ($(basename "${INPUT}")) as a csv."
     TREESIZE_CSV="${INPUT}"
 else
-    echo "Hmmm, not sure what ${INPUT} is. Exiting."
+    echo "Hmmm, not sure what ($(basename "${INPUT}")) is. Exiting."
     exit
 fi
+HEADER_LINE="$(sed '2q;d' "${TREESIZE_CSV}")"
+FILE_NAME_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Name' | cut -d: -f1)"
+FILE_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Folder Path' | cut -d: -f1)"
+if [[ -z "${FILE_PATH_INDEX}" ]] ; then
+    FILE_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Full Path' | cut -d: -f1)"
+fi
+FILE_SIZE_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Size' | cut -d: -f1)"
+LAST_MOD_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Modified' | cut -d: -f1)"
+LAST_ACCESS_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Accessed' | cut -d: -f1)"
+OWNER_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Owner' | cut -d: -f1)"
 
 _split_csv
-
+_report_on_service_files
+_report_duplicates
 
 _make_card_inventory(){
     EXTENSION="${1}"
@@ -71,46 +136,153 @@ _make_card_inventory(){
     LAST_DIR=""
     COUNTER=0
     FIRST=1
+    FILE_SIZE_PROCESSING_OK="Y"
+    
+    TEST_FILE_SIZE="$(xsv 'select' "${FILE_SIZE_INDEX}" < <(sed -n '3p' "${FILE_INVENTORY}"))"
+    if [[ "${TEST_FILE_SIZE//.}" != "${TEST_FILE_SIZE}" ]] ; then
+        FILE_SIZE_PROCESSING_OK="N"
+    fi
+
+    echo "Working on finding potential directories of sequential media files."
+    echo "action,path,last_modified,last_accessed,owner,first_filename,last_filename,most_common_pattern,most_common_pattern_count,total_size,mod_time_first,mod_time_last,mod_time_duration_hours,count_of_extension_match,is_it_a_card" > "${CARD_INVENTORY}"
     while read LINE ; do
-        PATH="$(echo "${LINE}" | /usr/bin/cut -d "," -f 2- | /usr/bin/sed -e "s|^\"||;s|.${EXTENSION},.*||;s|.${EXTENSION}\",.*||").${EXTENSION}"
-        DIR="$(/usr/bin/dirname "${PATH}")"
-        FILENAME="$(/usr/bin/basename "${PATH}")"
+        # lookup column number rather than guess that it is static.
+        FILE_PATH="$(xsv 'select' "${FILE_PATH_INDEX}" <<< "${LINE//\"/\"\"}")"
+        if [[ "${FILE_SIZE_PROCESSING_OK}" = "Y" ]] ; then
+            FILE_SIZE="$(xsv 'select' "${FILE_SIZE_INDEX}" <<< "${LINE}")"
+        fi
+        LAST_MOD="$(xsv 'select' "${LAST_MOD_INDEX}" <<< "${LINE}")"
+        LAST_MOD_TIMES+=("${LAST_MOD}")
+        FILENAME="$(xsv 'select' "${FILE_NAME_INDEX}" <<< "${LINE}")"
+        if [[ -z "${FIRST_FILENAME}" ]] ; then
+            FIRST_FILENAME="${FILENAME}"
+        fi
+        FILENAME_LIST+=("${FILENAME}")
+        if [[ "${FILE_SIZE_PROCESSING_OK}" = "Y" ]] ; then
+            FILE_SIZE_TALLY=$((FILE_SIZE_TALLY+FILE_SIZE))
+        fi
         ((COUNTER++))
-        if [[ "${FIRST}" = "1" ]] ; then
-            echo -n "${DIR},${FILENAME},"
+        if [[ -z "${START_LINE}" ]] ; then
+            IFS=, read -r LAST_ACCESS OWNER < <(xsv 'select' "${LAST_ACCESS_INDEX},${OWNER_INDEX}" <<< "${LINE}")
+            START_LINE=",\"${FILE_PATH}\",${LAST_MOD},${LAST_ACCESS},${OWNER},\"${FILENAME}\","
+            REPORTED_FIRST="${FILENAME}"
             FIRST=0
-        elif [[ "${DIR}" != "${LAST_DIR}" ]] ; then
-            echo "${LAST_FILENAME},${COUNTER}"
+        elif [[ "${FILE_PATH}" != "${LAST_DIR}" ]] ; then
+            if [[ "${COUNTER}" -gt 1 ]]; then
+                POPULAR_PATTERN=$(printf "%s\n" "${FILENAME_LIST[@]}" | awk '{gsub(/[0-9]/, "#"); count[$0]++} END {for (word in count) print count[word], word}' | sort -n -r | head -n1)
+                POPULAR_PATTERN_COUNT="$(awk '{print $1}' <<< "${POPULAR_PATTERN}")"
+                POPULAR_PATTERN_REMAINDER="${POPULAR_PATTERN//^[ ]*[0-9]* }"
+                [[ "${POPULAR_PATTERN_COUNT}" == "1" ]] && POPULAR_PATTERN_REMAINDER=""
+
+                # Sort timestamps in ascending order
+                SORTED_LAST_MOD_TIMES=($(printf "%s\n" "${LAST_MOD_TIMES[@]}" | sort))
+                START_MOD_DATE="${SORTED_LAST_MOD_TIMES[@]:0:2}"
+                END_MOD_DATE="${SORTED_LAST_MOD_TIMES[${#SORTED_LAST_MOD_TIMES[@]} - 2]} ${SORTED_LAST_MOD_TIMES[${#SORTED_LAST_MOD_TIMES[@]} - 1]}"
+                # Convert timestamps to epoch (seconds since 1970)
+                if [[ "$(uname)" == "Darwin" ]]; then
+                    # macOS (BSD date)
+                    START_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S" "$START_MOD_DATE" "+%s")
+                    END_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S" "$END_MOD_DATE" "+%s")
+                else
+                    # Linux (GNU date)
+                    START_EPOCH=$(date -d "$START_MOD_DATE" "+%s")
+                    END_EPOCH=$(date -d "$END_MOD_DATE" "+%s")
+                fi
+
+                # Check for conversion errors
+                if [[ -z "$START_EPOCH" || -z "$END_EPOCH" ]]; then
+                    echo "Error: Failed to convert date to epoch time." >&2
+                    exit 1
+                fi
+
+                # Calculate duration in seconds
+                DURATION_SECONDS=$((END_EPOCH - START_EPOCH))
+
+                # Convert seconds to hours (floating-point)
+                TIME_RANGE_HOURS=$((DURATION_SECONDS / 3600))
+
+
+                echo -n "${START_LINE}\"${LAST_FILENAME}\",\"${POPULAR_PATTERN_REMAINDER}\",${POPULAR_PATTERN_COUNT},${FILE_SIZE_TALLY},${START_MOD_DATE},${END_MOD_DATE},${TIME_RANGE_HOURS},${COUNTER},"
+
+                # files are renamed all the time, instead of first vs last try to match on most used pattern.
+                
+                # score the camera card likeliness
+                LIKELY=0
+                if [[ -n "${POPULAR_PATTERN_REMAINDER}" ]] ; then
+                    ((LIKELY++))
+                fi
+                if [[ $TIME_RANGE_HOURS -lt 48 ]]; then
+                    ((LIKELY++))
+                fi
+                # add report upon the proofsheet
+                if [[ "${REPORTED_FIRST//[0-9 ]}" == "${LAST_FILENAME//[0-9 ]}" ]] ; then
+                    ((LIKELY++))
+                fi
+                if [[ "${COUNTER}" != "1" ]] ; then
+                    ((LIKELY++))
+                fi
+                echo "${LIKELY}" >> "${CARD_INVENTORY}"
+            fi
             COUNTER="0"
-            echo -n "${DIR},${FILENAME},"
+            unset FIRST_FILENAME
+            unset LAST_MOD_TIMES
+            # why did this line come out 	//audio.cz.rferl.org/videosrv/Video-1/Central Newsroom/2018/06_2018/Halabja Doc Backup/KURD BACKUP VIDEO ROMAN	2/21/18	6/4/18	digainst	[569 Files]	RFERL4960.MXF	RFERL####.MXF	569		570	probably not
+            # 	//audio.cz.rferl.org/videosrv/Video-1/Services' Projects/KAZ/2018/10_2018/Aral film	10/5/18	10/8/18	KupkaR	[372 Files]	RFERL6723.MXF	RFERL####.MXF	372		373	probably not
+
+            # Oleksander comments
+            # treesize can export date and time. so can group videos by being in a pattern.
+            # only parse csv line if the data will be used
+            # can we remove if only 1 file per folder and if no pattern.
+            # add most common time range like the most common pattern, 
+            # get Folder Path in treesize, 
+
+            # card criteria: 1. filename pattern, last mod date time, and file count.
+            IFS=, read -r LAST_ACCESS OWNER < <(xsv 'select' "${LAST_ACCESS_INDEX},${OWNER_INDEX}" <<< "${LINE}")
+            START_LINE=",\"${FILE_PATH}\",${LAST_MOD},${LAST_ACCESS},${OWNER},\"${FILENAME}\","
+            REPORTED_FIRST="${FILENAME}"
+            unset FILENAME_LIST FILE_SIZE_TALLY 
         fi
         # add tally of the filesize
-        # last modification date
-        # add owner name
-        # add column on if cards match a pattern
         # add column if already processed
-        LAST_DIR="${DIR}"
+
+        ## refactor csv to xml
+        LAST_DIR="${FILE_PATH}"
         LAST_FILENAME="${FILENAME}"
-    done < <(/usr/bin/sed 's|\\|/|g' "${FILE_INVENTORY}") > "${CARD_INVENTORY}"
-    
+    done < <(sed 's|\\|/|g' "${FILE_INVENTORY}" | tail -n +2) >> "${CARD_INVENTORY}"
+    if [[ "${COUNTER}" -gt 1 ]]; then
+        POPULAR_PATTERN=$(printf "%s\n" "${FILENAME_LIST[@]}" | awk '{gsub(/[0-9]/, "#"); count[$0]++} END {for (word in count) print count[word], word}' | sort -n -r | head -n1)
+        POPULAR_PATTERN_COUNT="$(awk '{print $1}' <<< "${POPULAR_PATTERN}")"
+        POPULAR_PATTERN_REMAINDER="${POPULAR_PATTERN//^[ ]*[0-9]* }"
+        [[ "${POPULAR_PATTERN_COUNT}" == "1" ]] && POPULAR_PATTERN_REMAINDER=""
+        echo -n "${START_LINE}\"${LAST_FILENAME}\",\"${POPULAR_PATTERN_REMAINDER}\",${POPULAR_PATTERN_COUNT},${FILE_SIZE_TALLY},${START_MOD_DATE_FORMATTED},${END_MOD_DATE_FORMATTED},${TIME_RANGE_HOURS},${COUNTER}," >> "${CARD_INVENTORY}"
+
+        # score the camera card likeliness
+        LIKELY=0
+        if [[ -n "${POPULAR_PATTERN_REMAINDER}" ]] ; then
+            ((LIKELY++))
+        fi
+        if [[ $TIME_RANGE_HOURS -lt 48 ]]; then
+            ((LIKELY++))
+        fi
+        # add report upon the proofsheet
+        if [[ "${REPORTED_FIRST//[0-9 ]}" == "${LAST_FILENAME//[0-9 ]}" ]] ; then
+            ((LIKELY++))
+        fi
+        if [[ "${COUNTER}" != "1" ]] ; then
+            ((LIKELY++))
+        fi
+        echo "${LIKELY}" >> "${CARD_INVENTORY}"
+    fi
+    echo "Found $(grep -i "maybe$" "${CARD_INVENTORY}"| wc -l | awk '{print $1}') potential cards."
     # for log coming out of cameracards output, add the input list with filename,in,out,duration.
-    
+
     # to do
         # treesize with 
-    
+
 }
 
-MOV_CARD_INVENTORY="${TREESIZE_CSV%%.*}.MOV_cards.csv"
-_make_card_inventory "MOV" "${MOV_INVENTORY}" "${MOV_CARD_INVENTORY}"
-
-MP4_CARD_INVENTORY="${TREESIZE_CSV%%.*}.MP4_cards.csv"
-_make_card_inventory "MP4" "${MP4_INVENTORY}" "${MP4_CARD_INVENTORY}"
-
-MTS_CARD_INVENTORY="${TREESIZE_CSV%%.*}.MTS_cards.csv"
-_make_card_inventory "MTS" "${MTS_INVENTORY}" "${MTS_CARD_INVENTORY}"
-
-MXF_CARD_INVENTORY="${TREESIZE_CSV%%.*}.MXF_cards.csv"
-_make_card_inventory "MXF" "${MXF_INVENTORY}" "${MXF_CARD_INVENTORY}"
+MEDIA_CARD_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_CARDS.csv"
+_make_card_inventory "MOV" "${MEDIA_INVENTORY}" "${MEDIA_CARD_INVENTORY}"
 
 exit
 
