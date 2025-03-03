@@ -273,7 +273,7 @@ _make_card_inventory(){
         fi
         echo "${LIKELY}" >> "${CARD_INVENTORY}"
     fi
-    echo "Found $(grep -i "maybe$" "${CARD_INVENTORY}"| wc -l | awk '{print $1}') potential cards."
+    echo "Done, check out ${CARD_INVENTORY}."
     # for log coming out of cameracards output, add the input list with filename,in,out,duration.
 
     # to do
