@@ -227,9 +227,9 @@ _make_card_inventory(){
                     ((LIKELY++))
                 fi
                 # add report upon the proofsheet
-                if [[ "${REPORTED_FIRST//[0-9 ]}" == "${LAST_FILENAME//[0-9 ]}" ]] ; then
-                    ((LIKELY++))
-                fi
+                #if [[ "${REPORTED_FIRST//[0-9 ]}" == "${LAST_FILENAME//[0-9 ]}" ]] ; then
+                    #((LIKELY++))
+                    #fi
                 if [[ "${COUNTER}" != "1" ]] ; then
                     ((LIKELY++))
                 fi
