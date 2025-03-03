@@ -171,13 +171,22 @@ _make_card_inventory(){
             if [[ "${COUNTER}" -gt 1 ]]; then
                 POPULAR_PATTERN=$(printf "%s\n" "${FILENAME_LIST[@]}" | awk '{gsub(/[0-9]/, "#"); count[$0]++} END {for (word in count) print count[word], word}' | sort -n -r | head -n1)
                 POPULAR_PATTERN_COUNT="$(awk '{print $1}' <<< "${POPULAR_PATTERN}")"
-                POPULAR_PATTERN_REMAINDER="${POPULAR_PATTERN//^[ ]*[0-9]* }"
+                POPULAR_PATTERN_REMAINDER="$(echo "${POPULAR_PATTERN//^[ ]*}" | cut -d' ' -f2-)"
                 [[ "${POPULAR_PATTERN_COUNT}" == "1" ]] && POPULAR_PATTERN_REMAINDER=""
-
-                # Sort timestamps in ascending order
-                SORTED_LAST_MOD_TIMES=($(printf "%s\n" "${LAST_MOD_TIMES[@]}" | sort))
-                START_MOD_DATE="${SORTED_LAST_MOD_TIMES[@]:0:2}"
-                END_MOD_DATE="${SORTED_LAST_MOD_TIMES[${#SORTED_LAST_MOD_TIMES[@]} - 2]} ${SORTED_LAST_MOD_TIMES[${#SORTED_LAST_MOD_TIMES[@]} - 1]}"
+                declare -a matching_times=()
+                for i in "${!FILENAME_LIST[@]}"; do
+                    file="${FILENAME_LIST[i]}"
+                    mod_time="${LAST_MOD_TIMES[i]}"
+                    # Convert file to pattern format
+                    file_pattern=$(echo "$file" | sed 's/[0-9]/#/g')
+                    if [[ "$file_pattern" == "${POPULAR_PATTERN_REMAINDER}" ]]; then
+                        matching_times+=("$mod_time")
+                    fi
+                done
+                IFS=$'\n' sorted_times=($(sort <<<"${matching_times[*]}"))
+                unset IFS
+                START_MOD_DATE="${sorted_times[0]}"
+                END_MOD_DATE="${sorted_times[@]: -1}"
                 # Convert timestamps to epoch (seconds since 1970)
                 if [[ "$(uname)" == "Darwin" ]]; then
                     # macOS (BSD date)
