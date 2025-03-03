@@ -275,46 +275,8 @@ _make_card_inventory(){
     fi
     echo "Done, check out ${CARD_INVENTORY}."
     # for log coming out of cameracards output, add the input list with filename,in,out,duration.
-
-    # to do
-        # treesize with 
-
 }
 
 MEDIA_CARD_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_CARDS.csv"
 _make_card_inventory "MOV" "${MEDIA_INVENTORY}" "${MEDIA_CARD_INVENTORY}"
-
-exit
-
-### 1 find candidate camera cards by type
-    # to do, consider filtering out files that are not non "Video File" files or not used in camera card discovery
-
-echo "Find P2 cards:"
-grep "CONTENTS" "${TREESIZE_CSV}" | cut -d, -f2 | sed 's/CONTENTS.*//' | uniq
-# or if INDEX.MIF is found
-echo
-
-echo "Find XAVC cards:"
-grep "XDROOT" "${TREESIZE_CSV}" | cut -d, -f2 | sed 's/XDROOT.*//' | uniq
-# or search for DISCMETA.XML
-echo
-
-echo "Find AVCHD cards:"
-grep "BDMV" "${TREESIZE_CSV}" | cut -d, -f2 | sed 's/BDMV.*//' | uniq
-echo
-
-echo "Find XDCAMEX cards:"
-grep "BPAV" "${TREESIZE_CSV}" | cut -d, -f2 | sed 's/BPAV.*//' | uniq
-# or if INDEX.MIF is found
-echo
-
-# 1 find candidate camera cards by type
-# 2 validate cards (check that there's actually media inside)
-# 3 summary cards and compare to ingest status
-# 3.1 deduplicate card and dedupe across multiple tree size reports
-# 4A show thumbnail proofsheets of cards
-# 4 ingest selection of cards
-# 4.1 evaluate audio
-# 4.2 concatenate and transcode to output
-# 4.3 the concat output should just have 2 mono tracks
 
