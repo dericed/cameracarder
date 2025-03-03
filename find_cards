@@ -188,28 +188,28 @@ _make_card_inventory(){
                 START_MOD_DATE="${sorted_times[0]}"
                 END_MOD_DATE="${sorted_times[@]: -1}"
                 if [[ -n "${START_MOD_DATE}" && -n "${END_MOD_DATE}" ]] ; then
-                # Convert timestamps to epoch (seconds since 1970)
-                if [[ "$(uname)" == "Darwin" ]]; then
-                    # macOS (BSD date)
-                    START_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S" "$START_MOD_DATE" "+%s")
-                    END_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S" "$END_MOD_DATE" "+%s")
-                else
-                    # Linux (GNU date)
-                    START_EPOCH=$(date -d "$START_MOD_DATE" "+%s")
-                    END_EPOCH=$(date -d "$END_MOD_DATE" "+%s")
-                fi
+                    # Convert timestamps to epoch (seconds since 1970)
+                    if [[ "$(uname)" == "Darwin" ]]; then
+                        # macOS (BSD date)
+                        START_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S" "$START_MOD_DATE" "+%s")
+                        END_EPOCH=$(date -j -f "%Y-%m-%d %H:%M:%S" "$END_MOD_DATE" "+%s")
+                    else
+                        # Linux (GNU date)
+                        START_EPOCH=$(date -d "$START_MOD_DATE" "+%s")
+                        END_EPOCH=$(date -d "$END_MOD_DATE" "+%s")
+                    fi
 
-                # Check for conversion errors
-                if [[ -z "$START_EPOCH" || -z "$END_EPOCH" ]]; then
-                    echo "Error: Failed to convert date to epoch time." >&2
-                    exit 1
-                fi
+                    # Check for conversion errors
+                    if [[ -z "$START_EPOCH" || -z "$END_EPOCH" ]]; then
+                        echo "Error: Failed to convert date to epoch time." >&2
+                        exit 1
+                    fi
 
-                # Calculate duration in seconds
-                DURATION_SECONDS=$((END_EPOCH - START_EPOCH))
+                    # Calculate duration in seconds
+                    DURATION_SECONDS=$((END_EPOCH - START_EPOCH))
 
-                # Convert seconds to hours (floating-point)
-                TIME_RANGE_HOURS=$((DURATION_SECONDS / 3600))
+                    # Convert seconds to hours (floating-point)
+                    TIME_RANGE_HOURS=$((DURATION_SECONDS / 3600))
                 else
                     unset DURATION_SECONDS
                     unset TIME_RANGE_HOURS
