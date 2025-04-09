@@ -2,5 +2,7 @@
 SCRIPTDIR="$(dirname "${0}")"
 INPUT_DIR="${1}"
 OUTPUTS="${HOME}/Desktop/proofsheets"
-mkdir "${OUTPUTS}"
+if [[ ! -d "${OUTPUTS}" ]] ; then
+    mkdir "${OUTPUTS}"
+fi
 "${SCRIPTDIR}/camera_cards" -m "$(dirname "${1}")" -o "${OUTPUTS}" -p s -1 "${INPUT_DIR}"
