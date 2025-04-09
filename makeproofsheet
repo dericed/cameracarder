@@ -5,4 +5,4 @@ OUTPUTS="${HOME}/Desktop/proofsheets"
 if [[ ! -d "${OUTPUTS}" ]] ; then
     mkdir "${OUTPUTS}"
 fi
-"${SCRIPTDIR}/camera_cards" -m "$(dirname "${1}")" -o "${OUTPUTS}" -p s -1 "${INPUT_DIR}"
+"${SCRIPTDIR}/camera_cards" -m "$(basename "${1}")" -o "${OUTPUTS}" -p s -1 "${INPUT_DIR}"
