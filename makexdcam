@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+SCRIPTDIR="$(dirname "${0}")"
+INPUT_DIR="${1}"
+OUTPUTS="${HOME}/Desktop/xdcams"
+if [[ ! -d "${OUTPUTS}" ]] ; then
+    mkdir "${OUTPUTS}"
+fi
+"${SCRIPTDIR}/camera_cards" -m "$(dirname "${1}")" -o "${OUTPUTS}" -p xp -1 "${INPUT_DIR}"
