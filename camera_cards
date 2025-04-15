@@ -607,7 +607,7 @@ if [[ "${AIP}" == "YES" ]] ; then
                 MIDDLE_OPTIONS_ALL=(-ignore_unknown)
                 _report -b "Uknown encodings were found in ${FILE_NAME}. Will add -ignore_unknown while rewrapping."
             fi
-            echo "file '${FILE_NAME}'" >> "${TEMP_CONCATLIST}"
+            echo "file \"${FILE_NAME}\"" >> "${TEMP_CONCATLIST}"
         fi
     done < <(_read_inventory -f ",video,\|,audio,")
     while read INVENTORY_ROW ; do
