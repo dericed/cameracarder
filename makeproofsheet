@@ -1,8 +1,22 @@
 #!/usr/bin/env bash
 SCRIPTDIR="$(dirname "${0}")"
-INPUT_DIR="${1}"
+INPUT="${1}"
 OUTPUTS="${HOME}/Desktop/proofsheets"
 if [[ ! -d "${OUTPUTS}" ]] ; then
     mkdir "${OUTPUTS}"
 fi
-"${SCRIPTDIR}/camera_cards" -m "$(basename "${1}")" -o "${OUTPUTS}" -p s -1 "${INPUT_DIR}"
+
+_run_proofsheet(){
+    INPUT_DIR="${1}"
+    "${SCRIPTDIR}/camera_cards" -m "$(basename "${1}")" -o "${OUTPUTS}" -p s -1 "${INPUT_DIR}"
+}
+
+if [[ -d "${INPUT}" ]] ; then
+    _run_proofsheet "${INPUT}"
+elif [[ "${INPUT##*.}" = "csv" ]] ; then
+    while read INPUT_FROM_LIST ; do
+        _run_proofsheet "${INPUT_FROM_LIST}"
+    done < <(tail -n +2 "${INPUT}" | grep -v "^," | xsv select 2)
+else
+    echo "Invalid input. Run like '${0} /path/to/camera/card/directory' or like '${0} /path/to/project_MEDIA_CARDS.csv'."
+fi
