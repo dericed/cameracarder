@@ -58,9 +58,9 @@ _report_duplicates(){
 _report_on_service_files(){
     # add filter to give an age date.
     # one variable for mod date and one for access date
-
+    CSV_HEADER="$(head -n 1 "${MEDIA_INVENTORY}")"
     LIKELY_SERVICE_FILES="${TREESIZE_CSV%.*}.LIKELY_SERVICE_FILES.csv"
-    echo "Classification,Name,Path,Size,Files,Folders,% of Parent (Size),Last Modified,Last Accessed,Owner,Attributes,Type,Creation Date,File Extension" > "${LIKELY_SERVICE_FILES}"
+    echo "Classification,${CSV_HEADER}" > "${LIKELY_SERVICE_FILES}"
     grep --no-filename "^AFP[ -]TV" "${MEDIA_INVENTORY}" | sed 's|^|Likely AFP,|g' >> "${LIKELY_SERVICE_FILES}"
     grep --no-filename "^[0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9a-z]" "${MEDIA_INVENTORY}" | sed 's|^|Likely AP,|g' >> "${LIKELY_SERVICE_FILES}"
     grep --no-filename "[0-9]_[0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9a-z]" "${MEDIA_INVENTORY}" | sed 's|^|Likely AP,|g' >> "${LIKELY_SERVICE_FILES}"
