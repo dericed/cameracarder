@@ -1,0 +1,68 @@
+#!/bin/bash
+
+PATH_ADJUSTMENT_FROM='//audio.cz.rferl.org/videosrv/Video-1/'
+PATH_ADJUSTMENT_TO='/mnt/audio/'
+
+_usage(){
+        echo
+        echo "movecards"
+        echo "This script needs two arguments:"
+        echo "   an output directory to move files to"
+        echo "   and a *LIKELY_SERVICE_FILES.csv"
+        echo
+        echo "Usage: movefiles -d /path/to/move/to TEST.LIKELY_SERVICE_FILES.csv"
+        echo
+        echo "Note: this process is designed to move files within the same filesystem"
+        echo "Note: the listed filepath will have a find/replace from '${PATH_ADJUSTMENT_FROM}' to '${PATH_ADJUSTMENT_TO}'"
+        exit
+}
+
+OPTIND=1
+while getopts ":T:lrmDaAv:d:o:N:e:E:F:scYp:tu:wXCS:I:O:nh" OPT ; do
+    case "${OPT}" in
+        o) OUTPUT_DIR="${OPTARG}";;
+        h) _usage ;;
+        *) echo "bad option -${OPTARG}" ; _usage ;;
+        :) echo "Option -${OPTARG} requires an argument" ; _writeerrorlog "makederiv" "The option selected required an argument and none was provided. The script had to exit." ; exit 1 ;;
+    esac
+done
+shift $(( ${OPTIND} - 1 ))
+
+if [[ -z "${OUTPUT_DIR}" ]] ; then
+    echo "Error, we need an output directory. Please supply with -o."
+    echo
+    _usage
+elif [[ ! -d "${OUTPUT_DIR}" ]] ; then
+    echo "Error, ${OUTPUT_DIR} does not seem to exist."
+    _usage
+fi
+
+SERVICE_FILE_CSV="${1}"
+echo "Will replace paths in the csv from '${PATH_ADJUSTMENT_FROM}' to '${PATH_ADJUSTMENT_TO}'."
+HEADER_LINE="$(head -n 1 "${SERVICE_FILE_CSV}")"
+NAME_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Name' | cut -d: -f1)"
+FOLDER_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Folder Path' | cut -d: -f1)"
+LAST_MOD_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Modified' | cut -d: -f1)"
+
+echo "Heyy ${FOLDER_PATH_INDEX},${NAME_INDEX}"
+FILE_LIST="$(xsv 'select' "${FOLDER_PATH_INDEX},${NAME_INDEX}" -d "," "${SERVICE_FILE_CSV}" | tail -n +2 | sed 's|\\|/|g' | sed "s|${PATH_ADJUSTMENT_FROM}|${PATH_ADJUSTMENT_TO}|g;s|/,|/|g")"
+
+echo
+echo "Will prepare to move $(echo "${FILE_LIST}" | grep -c .) files."
+echo "${FILE_LIST}"
+echo
+echo "Will move these to ${OUTPUT_DIR} and keep their relative directory structure."
+read -p "Type 'y' to proceed or anything else to cancel: " confirm
+if [[ "$confirm" != "y" ]]; then
+    echo "Cancelled, bye."
+    exit 1
+fi
+while IFS= read -r file; do
+    [[ -z "$file" ]] && continue  # skip empty lines
+    PARENT_PATH="$(dirname "${file}")"
+    TARGET_PATH="${OUTPUT_DIR}/${PARENT_PATH}"
+    if [[ ! -d "${TARGET_PATH}" ]] ; then
+        mkdir -p "${TARGET_PATH}"
+    fi
+    mv -v -n "$file" "${TARGET_PATH}/"
+done <<< "${FILE_LIST}"
