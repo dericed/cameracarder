@@ -18,7 +18,7 @@ _usage(){
 }
 
 OPTIND=1
-while getopts ":T:lrmDaAv:d:o:N:e:E:F:scYp:tu:wXCS:I:O:nh" OPT ; do
+while getopts ":o:h" OPT ; do
     case "${OPT}" in
         o) OUTPUT_DIR="${OPTARG}";;
         h) _usage ;;
