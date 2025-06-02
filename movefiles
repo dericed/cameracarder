@@ -74,7 +74,11 @@ if [[ "$confirm" != "y" ]]; then
     exit 1
 fi
 while IFS= read -r file; do
-    [[ -z "$file" ]] && continue  # skip empty lines
+    [[ -z "${file}" ]] && continue  # skip empty lines
+    if [[ ! -f "${file}" ]] ; then
+        echo "Error $file is not found."
+        continue
+    fi
     PARENT_PATH="$(dirname "${file}")"
     TARGET_PATH="${OUTPUT_DIR}/${PARENT_PATH}"
     if [[ ! -d "${TARGET_PATH}" ]] ; then
