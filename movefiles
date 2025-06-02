@@ -14,21 +14,34 @@ _usage(){
         echo
         echo "Note: this process is designed to move files within the same filesystem"
         echo "Note: the listed filepath will have a find/replace from '${PATH_ADJUSTMENT_FROM}' to '${PATH_ADJUSTMENT_TO}'"
+        echo
+        echo "This script has two optional arguments:"
+        echo "   -c    which copies the files instead of moving them"
+        echo "   -r    which deletes the files instead of moving them"
+        echo "Note: -c and -r can not be used at the same time."
         exit
 }
 
+COPY_FILES=0
+REMOVE_FILES=0
 OPTIND=1
-while getopts ":o:h" OPT ; do
+while getopts ":o:hcr" OPT ; do
     case "${OPT}" in
         o) OUTPUT_DIR="${OPTARG}";;
         h) _usage ;;
+        c) COPY_FILES=1 ;;
+        r) REMOVE_FILES=1 ;;
         *) echo "bad option -${OPTARG}" ; _usage ;;
         :) echo "Option -${OPTARG} requires an argument" ; _writeerrorlog "makederiv" "The option selected required an argument and none was provided. The script had to exit." ; exit 1 ;;
     esac
 done
 shift $(( ${OPTIND} - 1 ))
 
-if [[ -z "${OUTPUT_DIR}" ]] ; then
+if [[ "${COPY_FILES}" -eq 1 && "${REMOVE_FILES}" -eq 1 ]] ; then
+    echo "Error, -r and -c cannot both be used."
+    echo
+    _usage
+elif [[ -z "${OUTPUT_DIR}" && ! "${REMOVE_FILES}" -eq 1 ]] ; then
     echo "Error, we need an output directory. Please supply with -o."
     echo
     _usage
@@ -67,5 +80,12 @@ while IFS= read -r file; do
     if [[ ! -d "${TARGET_PATH}" ]] ; then
         mkdir -p "${TARGET_PATH}"
     fi
-    mv -v -n "$file" "${TARGET_PATH}/"
+    
+    if [[ "${COPY_FILES}" -eq 1 ]] ; then
+        cp -v -n "${file}" "${TARGET_PATH}/" # Copy files
+    elif [[  "${REMOVE_FILES}" -eq 1 ]] ; then
+        rm -v -i "${file}" # Delete files
+    else
+        mv -v -n "$file" "${TARGET_PATH}/" # Move files
+    fi
 done <<< "${FILE_LIST}"
