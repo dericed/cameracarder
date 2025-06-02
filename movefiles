@@ -10,7 +10,7 @@ _usage(){
         echo "   an output directory to move files to"
         echo "   and a *LIKELY_SERVICE_FILES.csv"
         echo
-        echo "Usage: movefiles -d /path/to/move/to TEST.LIKELY_SERVICE_FILES.csv"
+        echo "Usage: movefiles -o /path/to/move/to TEST.LIKELY_SERVICE_FILES.csv"
         echo
         echo "Note: this process is designed to move files within the same filesystem"
         echo "Note: the listed filepath will have a find/replace from '${PATH_ADJUSTMENT_FROM}' to '${PATH_ADJUSTMENT_TO}'"
