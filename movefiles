@@ -1,6 +1,6 @@
 #!/bin/bash
 
-PATH_ADJUSTMENT_FROM='//audio.cz.rferl.org/videosrv/Video-1/'
+PATH_ADJUSTMENT_FROM='//audio.cz.rferl.org/videosrv/'
 PATH_ADJUSTMENT_TO='/mnt/audio/'
 
 _usage(){
