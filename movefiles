@@ -42,6 +42,9 @@ echo "Will replace paths in the csv from '${PATH_ADJUSTMENT_FROM}' to '${PATH_AD
 HEADER_LINE="$(head -n 1 "${SERVICE_FILE_CSV}")"
 NAME_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Name' | cut -d: -f1)"
 FOLDER_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Folder Path' | cut -d: -f1)"
+if [[ -z "${FOLDER_PATH_INDEX}" ]] ; then
+    FOLDER_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Path' | cut -d: -f1)"
+fi
 LAST_MOD_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Modified' | cut -d: -f1)"
 
 echo "Heyy ${FOLDER_PATH_INDEX},${NAME_INDEX}"
