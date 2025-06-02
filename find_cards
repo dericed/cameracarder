@@ -51,8 +51,136 @@ _report_duplicates(){
 
     # support deduplication across 
 
-    DUPLICATE_FILES="${TREESIZE_CSV%.*}.DUPLICATES.txt"
-    cut -d, -f1,3 "${MEDIA_INVENTORY}" | sort | uniq -c | grep -v "^   1" > "${DUPLICATE_FILES}"
+    DUPLICATE_FILES="${TREESIZE_CSV%.*}.DUPLICATES.csv"
+    
+    # Step 1: Parse CSV and group files by folder
+    # Key for duplicates: filename + size
+
+    declare -A FILES_IN_FOLDER  # folder -> list of "name|size"
+    declare -A FILE_DETAILS     # "folder|name|size" -> "last_modified|last_accessed"
+    declare -A FOLDER_FILESIZE  # folder -> total filesize
+
+    # Read CSV skipping header
+    while IFS=, read -r NAME FOLDER_PATH SIZE LAST_MODIFIED LAST_ACCESSED TYPE REST
+    do
+      # Remove possible quotes
+      NAME="${NAME//\"/}"
+      FOLDER_PATH="${FOLDER_PATH//\"/}"
+      SIZE="${SIZE//\"/}"
+      LAST_MODIFIED="${LAST_MODIFIED//\"/}"
+      LAST_ACCESSED="${LAST_ACCESSED//\"/}"
+
+      # Skip header line or blank lines
+      [[ "$NAME" == "Name" || -z "$NAME" ]] && continue
+
+      # Append file info to folder's list
+      FILES_IN_FOLDER["$FOLDER_PATH"]+="${NAME}|${SIZE},"
+
+      # Store details
+      FILE_DETAILS["$FOLDER_PATH|$NAME|$SIZE"]="${LAST_MODIFIED}|${LAST_ACCESSED}"
+
+      # Sum filesize
+      CURRENT_SIZE=${FOLDER_FILESIZE[$FOLDER_PATH]:-0}
+      FOLDER_FILESIZE[$FOLDER_PATH]=$((CURRENT_SIZE + SIZE))
+    done < <(tail -n +2 "${MEDIA_INVENTORY}")
+
+    # Convert FILES_IN_FOLDER from comma-separated string to arrays for easier matching
+    # We'll store arrays indexed by folder
+
+    declare -A FILE_ARRAYS
+
+    for FOLDER in "${!FILES_IN_FOLDER[@]}"; do
+      # Remove trailing comma and replace comma by space for array
+      FILE_LIST="${FILES_IN_FOLDER[$FOLDER]}"
+      FILE_LIST="${FILE_LIST%,}"
+      FILE_ARRAYS["$FOLDER"]="$FILE_LIST"
+    done
+
+    # Step 2: Compare folders to find duplicates
+
+    # We'll compare each folder with every other folder
+    # Calculate percentage match = (number of duplicate files) / (number of files in folder1) * 100
+
+    # Prepare output header
+    echo "Folder Path,Highest % Match,Other Folder Path,Timestamp Summary,Folder1 Total Size,Folder2 Total Size" > "${DUPLICATE_FILES}"
+
+    for FOLDER1 in "${!FILE_ARRAYS[@]}"; do
+      IFS=',' read -ra FILES1 <<< "${FILES_IN_FOLDER[$FOLDER1]}"
+      NUM_FILES1=${#FILES1[@]}
+
+      BEST_MATCH_PCT=0
+      BEST_MATCH_FOLDER=""
+      BEST_TIMESTAMP_SUMMARY=""
+      BEST_MATCH_FILES=0
+
+      for FOLDER2 in "${!FILE_ARRAYS[@]}"; do
+        [[ "$FOLDER1" == "$FOLDER2" ]] && continue
+
+        IFS=',' read -ra FILES2 <<< "${FILES_IN_FOLDER[$FOLDER2]}"
+        NUM_FILES2=${#FILES2[@]}
+
+        # Build associative array of FOLDER2 files for quick lookup
+        declare -A FILES2_MAP
+        for FILEINFO in "${FILES2[@]}"; do
+          FILES2_MAP["$FILEINFO"]=1
+        done
+
+        # Count duplicates
+        DUPLICATE_COUNT=0
+        declare -a FOLDER1_MOD_TIMES=()
+        declare -a FOLDER1_ACC_TIMES=()
+        declare -a FOLDER2_MOD_TIMES=()
+        declare -a FOLDER2_ACC_TIMES=()
+
+        for FILEINFO in "${FILES1[@]}"; do
+          if [[ -n "${FILES2_MAP[$FILEINFO]}" ]]; then
+            ((DUPLICATE_COUNT++))
+            # Extract name and size from FILEINFO (name|size)
+            NAME="${FILEINFO%%|*}"
+            SIZE="${FILEINFO##*|}"
+
+            # Get timestamps
+            IFS='|' read -r MOD1 ACC1 <<< "${FILE_DETAILS[$FOLDER1|$NAME|$SIZE]}"
+            IFS='|' read -r MOD2 ACC2 <<< "${FILE_DETAILS[$FOLDER2|$NAME|$SIZE]}"
+
+            FOLDER1_MOD_TIMES+=("$MOD1")
+            FOLDER1_ACC_TIMES+=("$ACC1")
+            FOLDER2_MOD_TIMES+=("$MOD2")
+            FOLDER2_ACC_TIMES+=("$ACC2")
+          fi
+        done
+
+        if (( DUPLICATE_COUNT > 0 )); then
+          PCT=$(( 100 * DUPLICATE_COUNT / NUM_FILES1 ))
+
+          if (( PCT > BEST_MATCH_PCT )); then
+            BEST_MATCH_PCT=$PCT
+            BEST_MATCH_FOLDER=$FOLDER2
+
+            # Timestamp summary: get min and max timestamps for mod and access in each folder for duplicates
+            MIN_MOD1=$(printf '%s\n' "${FOLDER1_MOD_TIMES[@]}" | sort | head -n1)
+            MAX_MOD1=$(printf '%s\n' "${FOLDER1_MOD_TIMES[@]}" | sort | tail -n1)
+            MIN_ACC1=$(printf '%s\n' "${FOLDER1_ACC_TIMES[@]}" | sort | head -n1)
+            MAX_ACC1=$(printf '%s\n' "${FOLDER1_ACC_TIMES[@]}" | sort | tail -n1)
+
+            MIN_MOD2=$(printf '%s\n' "${FOLDER2_MOD_TIMES[@]}" | sort | head -n1)
+            MAX_MOD2=$(printf '%s\n' "${FOLDER2_MOD_TIMES[@]}" | sort | tail -n1)
+            MIN_ACC2=$(printf '%s\n' "${FOLDER2_ACC_TIMES[@]}" | sort | head -n1)
+            MAX_ACC2=$(printf '%s\n' "${FOLDER2_ACC_TIMES[@]}" | sort | tail -n1)
+
+            BEST_TIMESTAMP_SUMMARY="Folder1 includes timestamps from $MIN_MOD1 to $MAX_MOD1 (mod) and $MIN_ACC1 to $MAX_ACC1 (access), while Folder2 includes timestamps from $MIN_MOD2 to $MAX_MOD2 (mod) and $MIN_ACC2 to $MAX_ACC2 (access)"
+          fi
+        fi
+
+        unset FILES2_MAP
+      done
+
+      if (( BEST_MATCH_PCT > 0 )); then
+        SIZE1=${FOLDER_FILESIZE[$FOLDER1]}
+        SIZE2=${FOLDER_FILESIZE[$BEST_MATCH_FOLDER]}
+        echo "$FOLDER1,$BEST_MATCH_PCT%,$BEST_MATCH_FOLDER,$BEST_TIMESTAMP_SUMMARY,$SIZE1,$SIZE2" >> "${DUPLICATE_FILES}"
+      fi
+    done
 }
 
 _report_on_service_files(){
