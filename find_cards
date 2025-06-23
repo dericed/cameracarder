@@ -9,9 +9,6 @@ DEPENDENCIES=(in2csv xsv)
 # get list of needed columns to add to documentation here
 # look up csv header row and the get index numbers of column
 
-INPUT="${1}"
-INPUT_EXT="${INPUT##*.}"
-
 # add appendix to report with helpful commands like find /folder -type d -empty
 
 _check_dependencies(){
@@ -245,12 +242,18 @@ while getopts ":xh" OPT; do
     esac
 done
 shift $(( OPTIND - 1 ))
+while [[ "${@}" != "" ]] ; do
+INPUT="${1}"
+INPUT_EXT="${INPUT##*.}"
+shift
 if [[ -d "${INPUT}" ]] ; then
     echo "Recognizing the input ($(basename "${INPUT}")) as a directory, but this isn't set up yet. Exiting."
     exit
 elif [[ "${INPUT_EXT}" = "xlsx" ]] ; then
     echo "Recognizing the input ($(basename "${INPUT}")) as an excel file. Perhaps a tree size report."
-    TREESIZE_CSV="${1%.*}.csv"
+    TREESIZE_CSV="${INPUT%.*}.csv"
+    TREESIZE_CSV_LIST+=("${TREESIZE_CSV}")
+    TREESIZE_CSV_LISTNAME+=("$(basename "${INPUT}")"_)
     if [[ -f "${TREESIZE_CSV}" ]] ; then
         echo "Seems like a csv was already made from the treesize report at ${TREESIZE_CSV}."
     else
@@ -454,3 +457,4 @@ _make_card_inventory(){
 MEDIA_CARD_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_CARDS.csv"
 _make_card_inventory "MOV" "${MEDIA_INVENTORY}" "${MEDIA_CARD_INVENTORY}"
 
+done
