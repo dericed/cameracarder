@@ -48,6 +48,9 @@ elif [[ -z "${OUTPUT_DIR}" && ! "${REMOVE_FILES}" -eq 1 ]] ; then
 elif [[ ! -d "${OUTPUT_DIR}" ]] ; then
     echo "Error, ${OUTPUT_DIR} does not seem to exist."
     _usage
+elif [[ ! -W "${OUTPUT_DIR}" ]] ; then
+    echo "Error, ${OUTPUT_DIR} exists but is not writeable."
+    _usage
 fi
 
 SERVICE_FILE_CSV="${1}"
