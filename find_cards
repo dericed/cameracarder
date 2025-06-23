@@ -230,14 +230,16 @@ Dependencies: ${DEPENDENCIES[@]}
 
 Usage: $(basename "${0}") -m MEDIAID [ -o AIP_DESTINATION ] [-tca] /path/to/input/camera_card_directory [ /path/to/input/camera_card_directory_2... ]
   -h display this help
+  -x only generate DUPLICATES.csv and LIKELY_SERVICE_FILES.csv and then stop (skipping the other outputs).
 EOF
     exit
 }
 
 # getopts loop
 OPTIND=1
-while getopts ":h" OPT; do
+while getopts ":xh" OPT; do
     case "${OPT}" in
+        x) JUST_SOME="Y" ;;
         h) _usage ;;  # if the operator runs "[scriptname] -h" then the _usage text above will display in the terminal
         *) echo "Invalid option -${OPTARG}" ; _usage ;; # if the operator tries to use an option other than the ones listed above, the _usage text will display in the terminal
     esac
@@ -284,6 +286,10 @@ OWNER_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Owner'
 _split_csv
 _report_on_service_files
 _report_duplicates "${TREESIZE_CSV}" "${TREESIZE_CSV%.*}.DUPLICATES.csv"
+if [[ "${JUST_SOME}" = "Y" ]] ; then
+    echo "since -x was used will skip the rest of the reports"
+    continue
+fi
 
 _make_card_inventory(){
     EXTENSION="${1}"
