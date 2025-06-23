@@ -181,119 +181,6 @@ _report_duplicates(){
     done
 }
 
-_report_on_service_files(){
-    # add filter to give an age date.
-    # one variable for mod date and one for access date
-    CSV_HEADER="$(head -n 1 "${MEDIA_INVENTORY}")"
-    LIKELY_SERVICE_FILES="${TREESIZE_CSV%.*}.LIKELY_SERVICE_FILES.csv"
-    echo "Classification,${CSV_HEADER}" > "${LIKELY_SERVICE_FILES}"
-    grep --no-filename "^AFP[ -]TV" "${MEDIA_INVENTORY}" | sed 's|^|Likely AFP,|g' >> "${LIKELY_SERVICE_FILES}"
-    grep --no-filename "^[0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9a-z]" "${MEDIA_INVENTORY}" | sed 's|^|Likely AP,|g' >> "${LIKELY_SERVICE_FILES}"
-    grep --no-filename "[0-9]_[0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9a-z]" "${MEDIA_INVENTORY}" | sed 's|^|Likely AP,|g' >> "${LIKELY_SERVICE_FILES}"
-    grep --no-filename "^20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z_" "${MEDIA_INVENTORY}" | sed 's|^|Likely Reuters,|g' >> "${LIKELY_SERVICE_FILES}"
-    grep --no-filename "^Storyful" "${MEDIA_INVENTORY}" | sed 's|^|Likely Storyful,|g' >> "${LIKELY_SERVICE_FILES}"
-    echo "Found $(wc -l "${LIKELY_SERVICE_FILES}" | awk '{print $1}') potential service files."
-    echo "$(grep -i "^Likely AFP,"     "${LIKELY_SERVICE_FILES}" | wc -l) AFP files"
-    echo "$(grep -i "^Likely AP,"      "${LIKELY_SERVICE_FILES}" | wc -l) AP files"
-    echo "$(grep -i "^Likely Reuters," "${LIKELY_SERVICE_FILES}" | wc -l) Reuters files"
-    echo "$(grep -i "^Likely Storyful" "${LIKELY_SERVICE_FILES}" | wc -l) Storyful files"
-}
-
-_split_csv(){
-    MEDIA_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_FILES.csv"
-    if [[ ! -f "${MEDIA_INVENTORY}" ]] ; then
-        echo "Splitting out an inventory of media files"
-        echo "${HEADER_LINE}" > "${MEDIA_INVENTORY}"
-        grep -i ".\(MOV\|MP4\|MTS\|MXF\)," "${TREESIZE_CSV}" | xsv sort --select "${FILE_PATH_INDEX},${FILE_NAME_INDEX}" >> "${MEDIA_INVENTORY}"
-        echo "Found $(wc -l "${MEDIA_INVENTORY}" | awk '{print $1}') media files."
-        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MOV$" -c) mov files"
-        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MP4$" -c) mp4 files"
-        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MTS$" -c) mts files"
-        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MXF$" -c) mxf files"
-    fi
-}
-
-_usage(){
-cat <<EOF
-$(basename "${0}")
-
-This script accepts a treesize report as an input and generates a list of resummarized outputs. Including:
-- DUPLICATES.csv            - A summary of folders that contain similar contents.
-- LIKELY_SERVICE_FILES.csv  - A list of files that match the naming patterns of news agency services.
-- MEDIA_FILES.csv           - A list of files from the treesize report that are mov, m2t, mxf, or mkv files.
-- MEDIA_CARDS.csv           - A list of directories that contain video files in a pattern which may be camera card directories.
-
-Dependencies: ${DEPENDENCIES[@]}
-
-Usage: $(basename "${0}") -m MEDIAID [ -o AIP_DESTINATION ] [-tca] /path/to/input/camera_card_directory [ /path/to/input/camera_card_directory_2... ]
-  -h display this help
-  -x only generate DUPLICATES.csv and LIKELY_SERVICE_FILES.csv and then stop (skipping the other outputs).
-EOF
-    exit
-}
-
-# getopts loop
-OPTIND=1
-while getopts ":xh" OPT; do
-    case "${OPT}" in
-        x) JUST_SOME="Y" ;;
-        h) _usage ;;  # if the operator runs "[scriptname] -h" then the _usage text above will display in the terminal
-        *) echo "Invalid option -${OPTARG}" ; _usage ;; # if the operator tries to use an option other than the ones listed above, the _usage text will display in the terminal
-    esac
-done
-shift $(( OPTIND - 1 ))
-while [[ "${@}" != "" ]] ; do
-INPUT="${1}"
-INPUT_EXT="${INPUT##*.}"
-shift
-if [[ -d "${INPUT}" ]] ; then
-    echo "Recognizing the input ($(basename "${INPUT}")) as a directory, but this isn't set up yet. Exiting."
-    exit
-elif [[ "${INPUT_EXT}" = "xlsx" ]] ; then
-    echo "Recognizing the input ($(basename "${INPUT}")) as an excel file. Perhaps a tree size report."
-    TREESIZE_CSV="${INPUT%.*}.csv"
-    TREESIZE_CSV_LIST+=("${TREESIZE_CSV}")
-    TREESIZE_CSV_LISTNAME+=("$(basename "${INPUT}")"_)
-    if [[ -f "${TREESIZE_CSV}" ]] ; then
-        echo "Seems like a csv was already made from the treesize report at ${TREESIZE_CSV}."
-    else
-        echo "Making a csv from the treesize report..."
-        INPUT_SHEETS="$(in2csv -n "${INPUT}")"
-        SHEET_NAME="$(echo "${INPUT_SHEETS}" | grep "^20" | head -n 1)"
-        if [[ -n "${SHEET_NAME}" ]] ; then
-            echo "This seems to be a treesize report with an inventory on the sheet named ${SHEET_NAME}."
-        else
-            echo "Hmmm, no file inventory found. Perhaps this isn't a treesize report."
-            exit
-        fi
-        in2csv --no-header-row --sheet "${SHEET_NAME}" "${INPUT}" > "${TREESIZE_CSV}"
-    fi
-elif [[ "${INPUT_EXT}" = "csv" ]] ; then
-    echo "Recognizing the input ($(basename "${INPUT}")) as a csv."
-    TREESIZE_CSV="${INPUT}"
-else
-    echo "Hmmm, not sure what ($(basename "${INPUT}")) is. Exiting."
-    exit
-fi
-HEADER_LINE="$(sed '2q;d' "${TREESIZE_CSV}")"
-FILE_NAME_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Name' | cut -d: -f1)"
-FILE_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Folder Path' | cut -d: -f1)"
-if [[ -z "${FILE_PATH_INDEX}" ]] ; then
-    FILE_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Full Path' | cut -d: -f1)"
-fi
-FILE_SIZE_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Size' | cut -d: -f1)"
-LAST_MOD_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Modified' | cut -d: -f1)"
-LAST_ACCESS_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Accessed' | cut -d: -f1)"
-OWNER_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Owner' | cut -d: -f1)"
-
-_split_csv
-_report_on_service_files
-_report_duplicates "${TREESIZE_CSV}" "${TREESIZE_CSV%.*}.DUPLICATES.csv"
-if [[ "${JUST_SOME}" = "Y" ]] ; then
-    echo "since -x was used will skip the rest of the reports"
-    continue
-fi
-
 _make_card_inventory(){
     EXTENSION="${1}"
     FILE_INVENTORY="${2}"
@@ -453,6 +340,119 @@ _make_card_inventory(){
     echo "Done, check out ${CARD_INVENTORY}."
     # for log coming out of cameracards output, add the input list with filename,in,out,duration.
 }
+
+_report_on_service_files(){
+    # add filter to give an age date.
+    # one variable for mod date and one for access date
+    CSV_HEADER="$(head -n 1 "${MEDIA_INVENTORY}")"
+    LIKELY_SERVICE_FILES="${TREESIZE_CSV%.*}.LIKELY_SERVICE_FILES.csv"
+    echo "Classification,${CSV_HEADER}" > "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "^AFP[ -]TV" "${MEDIA_INVENTORY}" | sed 's|^|Likely AFP,|g' >> "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "^[0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9a-z]" "${MEDIA_INVENTORY}" | sed 's|^|Likely AP,|g' >> "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "[0-9]_[0-9][0-9][0-9][0-9][0-9][0-9][0-9]_[0-9a-z]" "${MEDIA_INVENTORY}" | sed 's|^|Likely AP,|g' >> "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "^20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9][0-9][0-9][0-9][0-9]Z_" "${MEDIA_INVENTORY}" | sed 's|^|Likely Reuters,|g' >> "${LIKELY_SERVICE_FILES}"
+    grep --no-filename "^Storyful" "${MEDIA_INVENTORY}" | sed 's|^|Likely Storyful,|g' >> "${LIKELY_SERVICE_FILES}"
+    echo "Found $(wc -l "${LIKELY_SERVICE_FILES}" | awk '{print $1}') potential service files."
+    echo "$(grep -i "^Likely AFP,"     "${LIKELY_SERVICE_FILES}" | wc -l) AFP files"
+    echo "$(grep -i "^Likely AP,"      "${LIKELY_SERVICE_FILES}" | wc -l) AP files"
+    echo "$(grep -i "^Likely Reuters," "${LIKELY_SERVICE_FILES}" | wc -l) Reuters files"
+    echo "$(grep -i "^Likely Storyful" "${LIKELY_SERVICE_FILES}" | wc -l) Storyful files"
+}
+
+_split_csv(){
+    MEDIA_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_FILES.csv"
+    if [[ ! -f "${MEDIA_INVENTORY}" ]] ; then
+        echo "Splitting out an inventory of media files"
+        echo "${HEADER_LINE}" > "${MEDIA_INVENTORY}"
+        grep -i ".\(MOV\|MP4\|MTS\|MXF\)," "${TREESIZE_CSV}" | xsv sort --select "${FILE_PATH_INDEX},${FILE_NAME_INDEX}" >> "${MEDIA_INVENTORY}"
+        echo "Found $(wc -l "${MEDIA_INVENTORY}" | awk '{print $1}') media files."
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MOV$" -c) mov files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MP4$" -c) mp4 files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MTS$" -c) mts files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MXF$" -c) mxf files"
+    fi
+}
+
+_usage(){
+cat <<EOF
+$(basename "${0}")
+
+This script accepts a treesize report as an input and generates a list of resummarized outputs. Including:
+- DUPLICATES.csv            - A summary of folders that contain similar contents.
+- LIKELY_SERVICE_FILES.csv  - A list of files that match the naming patterns of news agency services.
+- MEDIA_FILES.csv           - A list of files from the treesize report that are mov, m2t, mxf, or mkv files.
+- MEDIA_CARDS.csv           - A list of directories that contain video files in a pattern which may be camera card directories.
+
+Dependencies: ${DEPENDENCIES[@]}
+
+Usage: $(basename "${0}") -m MEDIAID [ -o AIP_DESTINATION ] [-tca] /path/to/input/camera_card_directory [ /path/to/input/camera_card_directory_2... ]
+  -h display this help
+  -x only generate DUPLICATES.csv and LIKELY_SERVICE_FILES.csv and then stop (skipping the other outputs).
+EOF
+    exit
+}
+
+# getopts loop
+OPTIND=1
+while getopts ":xh" OPT; do
+    case "${OPT}" in
+        x) JUST_SOME="Y" ;;
+        h) _usage ;;  # if the operator runs "[scriptname] -h" then the _usage text above will display in the terminal
+        *) echo "Invalid option -${OPTARG}" ; _usage ;; # if the operator tries to use an option other than the ones listed above, the _usage text will display in the terminal
+    esac
+done
+shift $(( OPTIND - 1 ))
+while [[ "${@}" != "" ]] ; do
+INPUT="${1}"
+INPUT_EXT="${INPUT##*.}"
+shift
+if [[ -d "${INPUT}" ]] ; then
+    echo "Recognizing the input ($(basename "${INPUT}")) as a directory, but this isn't set up yet. Exiting."
+    exit
+elif [[ "${INPUT_EXT}" = "xlsx" ]] ; then
+    echo "Recognizing the input ($(basename "${INPUT}")) as an excel file. Perhaps a tree size report."
+    TREESIZE_CSV="${INPUT%.*}.csv"
+    TREESIZE_CSV_LIST+=("${TREESIZE_CSV}")
+    TREESIZE_CSV_LISTNAME+=("$(basename "${INPUT}")"_)
+    if [[ -f "${TREESIZE_CSV}" ]] ; then
+        echo "Seems like a csv was already made from the treesize report at ${TREESIZE_CSV}."
+    else
+        echo "Making a csv from the treesize report..."
+        INPUT_SHEETS="$(in2csv -n "${INPUT}")"
+        SHEET_NAME="$(echo "${INPUT_SHEETS}" | grep "^20" | head -n 1)"
+        if [[ -n "${SHEET_NAME}" ]] ; then
+            echo "This seems to be a treesize report with an inventory on the sheet named ${SHEET_NAME}."
+        else
+            echo "Hmmm, no file inventory found. Perhaps this isn't a treesize report."
+            exit
+        fi
+        in2csv --no-header-row --sheet "${SHEET_NAME}" "${INPUT}" > "${TREESIZE_CSV}"
+    fi
+elif [[ "${INPUT_EXT}" = "csv" ]] ; then
+    echo "Recognizing the input ($(basename "${INPUT}")) as a csv."
+    TREESIZE_CSV="${INPUT}"
+else
+    echo "Hmmm, not sure what ($(basename "${INPUT}")) is. Exiting."
+    exit
+fi
+HEADER_LINE="$(sed '2q;d' "${TREESIZE_CSV}")"
+FILE_NAME_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Name' | cut -d: -f1)"
+FILE_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Folder Path' | cut -d: -f1)"
+if [[ -z "${FILE_PATH_INDEX}" ]] ; then
+    FILE_PATH_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Full Path' | cut -d: -f1)"
+fi
+FILE_SIZE_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Size' | cut -d: -f1)"
+LAST_MOD_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Modified' | cut -d: -f1)"
+LAST_ACCESS_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Accessed' | cut -d: -f1)"
+OWNER_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Owner' | cut -d: -f1)"
+
+_split_csv
+_report_on_service_files
+_report_duplicates "${TREESIZE_CSV}" "${TREESIZE_CSV%.*}.DUPLICATES.csv"
+if [[ "${JUST_SOME}" = "Y" ]] ; then
+    echo "since -x was used will skip the rest of the reports"
+    continue
+fi
 
 MEDIA_CARD_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_CARDS.csv"
 _make_card_inventory "MOV" "${MEDIA_INVENTORY}" "${MEDIA_CARD_INVENTORY}"
