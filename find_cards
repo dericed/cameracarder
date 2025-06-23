@@ -402,6 +402,7 @@ while getopts ":xh" OPT; do
     esac
 done
 shift $(( OPTIND - 1 ))
+INPUT_COUNT="$#"
 while [[ "${@}" != "" ]] ; do
 INPUT="${1}"
 INPUT_EXT="${INPUT##*.}"
@@ -458,3 +459,9 @@ MEDIA_CARD_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_CARDS.csv"
 _make_card_inventory "MOV" "${MEDIA_INVENTORY}" "${MEDIA_CARD_INVENTORY}"
 
 done
+if [[ "${INPUT_COUNT}" -gt 1 ]] ; then
+    echo "Now finding duplicates across the input treesize reports and writing to ${TREESIZE_CSV_LISTNAME}_SPANNING_DUPLICATES.csv"
+    echo "Inputs to duplicate test: ${TREESIZE_CSV_LIST[@]}"
+    cat "${TREESIZE_CSV_LIST[@]}" > "${TREESIZE_CSV_LISTNAME}_SPANNING.csv"
+    _report_duplicates "${TREESIZE_CSV_LISTNAME}_SPANNING.csv" "${TREESIZE_CSV_LISTNAME}_SPANNING_DUPLICATES.csv"
+fi
