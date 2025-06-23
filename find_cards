@@ -215,6 +215,33 @@ _split_csv(){
     fi
 }
 
+_usage(){
+cat <<EOF
+$(basename "${0}")
+
+This script accepts a treesize report as an input and generates a list of resummarized outputs. Including:
+- DUPLICATES.csv            - A summary of folders that contain similar contents.
+- LIKELY_SERVICE_FILES.csv  - A list of files that match the naming patterns of news agency services.
+- MEDIA_FILES.csv           - A list of files from the treesize report that are mov, m2t, mxf, or mkv files.
+- MEDIA_CARDS.csv           - A list of directories that contain video files in a pattern which may be camera card directories.
+
+Dependencies: ${DEPENDENCIES[@]}
+
+Usage: $(basename "${0}") -m MEDIAID [ -o AIP_DESTINATION ] [-tca] /path/to/input/camera_card_directory [ /path/to/input/camera_card_directory_2... ]
+  -h display this help
+EOF
+    exit
+}
+
+# getopts loop
+OPTIND=1
+while getopts ":h" OPT; do
+    case "${OPT}" in
+        h) _usage ;;  # if the operator runs "[scriptname] -h" then the _usage text above will display in the terminal
+        *) echo "Invalid option -${OPTARG}" ; _usage ;; # if the operator tries to use an option other than the ones listed above, the _usage text will display in the terminal
+    esac
+done
+shift $(( OPTIND - 1 ))
 if [[ -d "${INPUT}" ]] ; then
     echo "Recognizing the input ($(basename "${INPUT}")) as a directory, but this isn't set up yet. Exiting."
     exit
