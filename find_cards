@@ -48,7 +48,7 @@ _report_duplicates(){
 
     INPUT_CSV="${1}"
     OUTPUT_CSV="${2}"
-
+    echo "Working on the duplicate report now..."
     # Step 1: Parse CSV and group files by folder
     # Key for duplicates: filename + size
 
