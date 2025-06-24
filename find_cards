@@ -408,6 +408,7 @@ while [[ "${@}" != "" ]] ; do
 INPUT="${1}"
 INPUT_EXT="${INPUT##*.}"
 shift
+echo "--------------------------------------------------------------------------"
 if [[ -d "${INPUT}" ]] ; then
     echo "Recognizing the input ($(basename "${INPUT}")) as a directory, but this isn't set up yet. Exiting."
     exit
