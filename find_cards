@@ -98,11 +98,16 @@ _report_duplicates(){
     # Calculate percentage match = (number of duplicate files) / (number of files in folder1) * 100
 
     # Prepare output header
-    echo "Folder Path,Highest % Match,Other Folder Path,Timestamp Summary 1,Timestamp Summary 2,Folder1 Total Size,Folder2 Total Size" > "${OUTPUT_CSV}"
+    echo "Folder Path,Highest % Match,Other Folder Path,Timestamp Summary 1,Timestamp Summary 2,Most Common Pattern,Most Common Pattern Count,Folder1 Total Size,Folder2 Total Size" > "${OUTPUT_CSV}"
 
     for FOLDER1 in "${!FILE_ARRAYS[@]}"; do
       IFS=',' read -ra FILES1 <<< "${FILES_IN_FOLDER[$FOLDER1]}"
       NUM_FILES1=${#FILES1[@]}
+
+      POPULAR_PATTERN=$(printf "%s\n" "${FILES1[@]}" | cut -d'|' -f1 | awk '{gsub(/[0-9]/, "#"); count[$0]++} END {for (word in count) print count[word], word}' | sort -n -r | head -n1)
+      POPULAR_PATTERN_COUNT="$(awk '{print $1}' <<< "${POPULAR_PATTERN}")"
+      POPULAR_PATTERN_REMAINDER="${POPULAR_PATTERN//^[ ]*[0-9]* }"
+      [[ "${POPULAR_PATTERN_COUNT}" == "1" ]] && POPULAR_PATTERN_REMAINDER=""
 
       BEST_MATCH_PCT=0
       BEST_MATCH_FOLDER=""
@@ -174,7 +179,7 @@ _report_duplicates(){
       if (( BEST_MATCH_PCT > 0 )); then
         SIZE1=${FOLDER_FILESIZE[$FOLDER1]}
         SIZE2=${FOLDER_FILESIZE[$BEST_MATCH_FOLDER]}
-        echo "$FOLDER1,$BEST_MATCH_PCT%,$BEST_MATCH_FOLDER,$BEST_TIMESTAMP_SUMMARY,$SIZE1,$SIZE2" >> "${OUTPUT_CSV}"
+        echo "$FOLDER1,$BEST_MATCH_PCT%,$BEST_MATCH_FOLDER,$BEST_TIMESTAMP_SUMMARY,$POPULAR_PATTERN_REMAINDER,$POPULAR_PATTERN_COUNT,$SIZE1,$SIZE2" >> "${OUTPUT_CSV}"
       fi
     done
 }
