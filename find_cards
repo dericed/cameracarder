@@ -100,6 +100,7 @@ _report_duplicates(){
     # Prepare output header
     echo "Folder Path,Highest % Match,Other Folder Path,Timestamp Summary,Most Common Pattern,Most Common Pattern Count,Folder1 Total Size,Folder2 Total Size" > "${OUTPUT_CSV}"
 
+    REPORTED_FOLDERS="|"
     for FOLDER1 in "${!FILE_ARRAYS[@]}"; do
       IFS=',' read -ra FILES1 <<< "${FILES_IN_FOLDER[$FOLDER1]}"
       NUM_FILES1=${#FILES1[@]}
@@ -179,7 +180,12 @@ _report_duplicates(){
       if (( BEST_MATCH_PCT > 0 )); then
         SIZE1=${FOLDER_FILESIZE[$FOLDER1]}
         SIZE2=${FOLDER_FILESIZE[$BEST_MATCH_FOLDER]}
-        echo "$FOLDER1,$BEST_MATCH_PCT%,$BEST_MATCH_FOLDER,$BEST_TIMESTAMP_SUMMARY,$POPULAR_PATTERN_REMAINDER,$POPULAR_PATTERN_COUNT,$SIZE1,$SIZE2" >> "${OUTPUT_CSV}"
+        REPORTED_FOLDERS+="${FOLDER1}|"
+        if  [[ "${REPORTED_FOLDERS}" == *"|${BEST_MATCH_FOLDER}|"* ]] ; then
+            echo "${BEST_MATCH_FOLDER} was already reported"
+        else
+            echo "$FOLDER1,$BEST_MATCH_PCT%,$BEST_MATCH_FOLDER,$BEST_TIMESTAMP_SUMMARY,$POPULAR_PATTERN_REMAINDER,$POPULAR_PATTERN_COUNT,$SIZE1,$SIZE2" >> "${OUTPUT_CSV}"
+        fi
       fi
     done
 }
