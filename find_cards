@@ -48,9 +48,9 @@ _report_duplicates(){
 
     # support deduplication across 
 
-    INPUT="${1}"
-    OUTPUT="${2}"
-    
+    INPUT_CSV="${1}"
+    OUTPUT_CSV="${2}"
+
     # Step 1: Parse CSV and group files by folder
     # Key for duplicates: filename + size
 
@@ -80,7 +80,7 @@ _report_duplicates(){
       # Sum filesize
       CURRENT_SIZE=${FOLDER_FILESIZE[$FOLDER_PATH]:-0}
       FOLDER_FILESIZE[$FOLDER_PATH]=$((CURRENT_SIZE + SIZE))
-    done < <(tail -n +2 "${MEDIA_INVENTORY}")
+    done < <(tail -n +2 "${INPUT_CSV}")
 
     # Convert FILES_IN_FOLDER from comma-separated string to arrays for easier matching
     # We'll store arrays indexed by folder
@@ -100,7 +100,7 @@ _report_duplicates(){
     # Calculate percentage match = (number of duplicate files) / (number of files in folder1) * 100
 
     # Prepare output header
-    echo "Folder Path,Highest % Match,Other Folder Path,Timestamp Summary,Folder1 Total Size,Folder2 Total Size" > "${OUTPUT}"
+    echo "Folder Path,Highest % Match,Other Folder Path,Timestamp Summary,Folder1 Total Size,Folder2 Total Size" > "${OUTPUT_CSV}"
 
     for FOLDER1 in "${!FILE_ARRAYS[@]}"; do
       IFS=',' read -ra FILES1 <<< "${FILES_IN_FOLDER[$FOLDER1]}"
@@ -176,7 +176,7 @@ _report_duplicates(){
       if (( BEST_MATCH_PCT > 0 )); then
         SIZE1=${FOLDER_FILESIZE[$FOLDER1]}
         SIZE2=${FOLDER_FILESIZE[$BEST_MATCH_FOLDER]}
-        echo "$FOLDER1,$BEST_MATCH_PCT%,$BEST_MATCH_FOLDER,$BEST_TIMESTAMP_SUMMARY,$SIZE1,$SIZE2" >> "${OUTPUT}"
+        echo "$FOLDER1,$BEST_MATCH_PCT%,$BEST_MATCH_FOLDER,$BEST_TIMESTAMP_SUMMARY,$SIZE1,$SIZE2" >> "${OUTPUT_CSV}"
       fi
     done
 }
@@ -360,16 +360,17 @@ _report_on_service_files(){
 }
 
 _split_csv(){
-    MEDIA_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_FILES.csv"
-    if [[ ! -f "${MEDIA_INVENTORY}" ]] ; then
+    TREESIZE_CSV4SPLIT="${1}"
+    MEDIA_INVENTORY4SPLIT="${2}"
+    if [[ ! -f "${MEDIA_INVENTORY4SPLIT}" ]] ; then
         echo "Splitting out an inventory of media files"
-        echo "${HEADER_LINE}" > "${MEDIA_INVENTORY}"
-        grep -i ".\(MOV\|MP4\|MTS\|MXF\)," "${TREESIZE_CSV}" | xsv sort --select "${FILE_PATH_INDEX},${FILE_NAME_INDEX}" >> "${MEDIA_INVENTORY}"
-        echo "Found $(wc -l "${MEDIA_INVENTORY}" | awk '{print $1}') media files."
-        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MOV$" -c) mov files"
-        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MP4$" -c) mp4 files"
-        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MTS$" -c) mts files"
-        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY}" | grep -i ".MXF$" -c) mxf files"
+        echo "${HEADER_LINE}" > "${MEDIA_INVENTORY4SPLIT}"
+        grep -i ".\(MOV\|MP4\|MTS\|MXF\)," "${TREESIZE_CSV4SPLIT}" | xsv sort --select "${FILE_PATH_INDEX},${FILE_NAME_INDEX}" >> "${MEDIA_INVENTORY4SPLIT}"
+        echo "Found $(wc -l "${MEDIA_INVENTORY4SPLIT}" | awk '{print $1}') media files."
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY4SPLIT}" | grep -i ".MOV$" -c) mov files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY4SPLIT}" | grep -i ".MP4$" -c) mp4 files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY4SPLIT}" | grep -i ".MTS$" -c) mts files"
+        echo "   $(xsv \select "${FILE_NAME_INDEX}" "${MEDIA_INVENTORY4SPLIT}" | grep -i ".MXF$" -c) mxf files"
     fi
 }
 
@@ -413,8 +414,6 @@ if [[ -d "${INPUT}" ]] ; then
 elif [[ "${INPUT_EXT}" = "xlsx" ]] ; then
     echo "Recognizing the input ($(basename "${INPUT}")) as an excel file. Perhaps a tree size report."
     TREESIZE_CSV="${INPUT%.*}.csv"
-    TREESIZE_CSV_LIST+=("${TREESIZE_CSV}")
-    TREESIZE_CSV_LISTNAME+=("$(basename "${INPUT}")"_)
     if [[ -f "${TREESIZE_CSV}" ]] ; then
         echo "Seems like a csv was already made from the treesize report at ${TREESIZE_CSV}."
     else
@@ -447,9 +446,12 @@ LAST_MOD_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Las
 LAST_ACCESS_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Last Accessed' | cut -d: -f1)"
 OWNER_INDEX="$(echo "${HEADER_LINE}" | sed -n $'1s/,/\\\n/gp' | grep -nx 'Owner' | cut -d: -f1)"
 
-_split_csv
+MEDIA_INVENTORY="${TREESIZE_CSV%.*}.MEDIA_FILES.csv"
+_split_csv "${TREESIZE_CSV}" "${MEDIA_INVENTORY}"
+MEDIA_INVENTORY_CSV_LIST+=("${MEDIA_INVENTORY}")
+MEDIA_INVENTORY_CSV_LISTNAME="${MEDIA_INVENTORY_CSV_LISTNAME}_$(basename "${INPUT%.*}")"
 _report_on_service_files
-_report_duplicates "${TREESIZE_CSV}" "${TREESIZE_CSV%.*}.DUPLICATES.csv"
+_report_duplicates "${MEDIA_INVENTORY}" "${TREESIZE_CSV%.*}.DUPLICATES.csv"
 if [[ "${JUST_SOME}" = "Y" ]] ; then
     echo "since -x was used will skip the rest of the reports"
     continue
@@ -460,8 +462,9 @@ _make_card_inventory "MOV" "${MEDIA_INVENTORY}" "${MEDIA_CARD_INVENTORY}"
 
 done
 if [[ "${INPUT_COUNT}" -gt 1 ]] ; then
-    echo "Now finding duplicates across the input treesize reports and writing to ${TREESIZE_CSV_LISTNAME}_SPANNING_DUPLICATES.csv"
-    echo "Inputs to duplicate test: ${TREESIZE_CSV_LIST[@]}"
-    cat "${TREESIZE_CSV_LIST[@]}" > "${TREESIZE_CSV_LISTNAME}_SPANNING.csv"
-    _report_duplicates "${TREESIZE_CSV_LISTNAME}_SPANNING.csv" "${TREESIZE_CSV_LISTNAME}_SPANNING_DUPLICATES.csv"
+    echo "--------------------------------------------------------------------------"
+    echo "Now finding duplicates across the input treesize reports and writing to ${MEDIA_INVENTORY_CSV_LISTNAME}_SPANNING_DUPLICATES.csv"
+    echo "Inputs to duplicate test: ${MEDIA_INVENTORY_CSV_LIST[@]}"
+    cat "${MEDIA_INVENTORY_CSV_LIST[@]}" > "${MEDIA_INVENTORY_CSV_LISTNAME}_SPANNING.csv"
+    _report_duplicates "${MEDIA_INVENTORY_CSV_LISTNAME}_SPANNING.csv" "${MEDIA_INVENTORY_CSV_LISTNAME}_SPANNING_DUPLICATES.csv"
 fi
