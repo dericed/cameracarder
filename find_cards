@@ -46,8 +46,6 @@ _report_duplicates(){
     # duplicate column that is the preserved orginal, column of the deleted.
     # have a column to opt into the process. g
 
-    # support deduplication across 
-
     INPUT_CSV="${1}"
     OUTPUT_CSV="${2}"
 
